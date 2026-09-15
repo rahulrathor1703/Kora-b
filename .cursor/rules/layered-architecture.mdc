@@ -1,0 +1,48 @@
+---
+description: Backend layered architecture — controllers, services, repositories
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# Backend Layered Architecture
+
+## Controllers (`*.controller.ts`)
+
+HTTP requests only. Delegate all logic to services.
+
+```typescript
+// ✅ GOOD
+@Get(':id')
+findOne(@Param('id') id: string) {
+  return this.healthService.getHealth();
+}
+
+// ❌ BAD — direct DB access in controller
+@Get(':id')
+findOne(@Param('id') id: string) {
+  return this.repository.findOne({ where: { id } });
+}
+```
+
+## Services (`*.service.ts`)
+
+Business logic, validation, and exceptions. Inject repositories — never TypeORM.
+
+```typescript
+// ✅ GOOD
+async getHealth() {
+  await this.healthRepository.pingDatabase();
+  return { status: 'ok' };
+}
+```
+
+## Repositories (`*.repository.ts`)
+
+Database calls only. No HTTP decorators, no business exceptions.
+
+```typescript
+// ✅ GOOD
+pingDatabase() {
+  return this.dataSource.query('SELECT 1');
+}
+```
