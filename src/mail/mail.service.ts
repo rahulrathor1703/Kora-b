@@ -11,6 +11,9 @@ export interface InviteEmailPayload {
   invitedByEmail: string;
 }
 
+const RESEND_API_URL = 'https://api.resend.com/emails';
+const RESEND_TIMEOUT_MS = 20_000;
+
 @Injectable()
 export class MailService {
   private transporter: Transporter | null = null;
@@ -18,11 +21,7 @@ export class MailService {
   constructor(private readonly config: ConfigService) {}
 
   async sendOtpEmail(to: string, code: string): Promise<void> {
-    const transporter = this.getTransporter();
-    const from = this.config.get<string>('smtp.from') ?? 'noreply@markos.dev';
-
-    await transporter.sendMail({
-      from,
+    await this.deliverEmail({
       to,
       subject: 'Your Markos verification code',
       text: [
@@ -44,11 +43,7 @@ export class MailService {
   }
 
   async sendInviteEmail(payload: InviteEmailPayload): Promise<void> {
-    const transporter = this.getTransporter();
-    const from = this.config.get<string>('smtp.from') ?? 'noreply@markos.dev';
-
-    await transporter.sendMail({
-      from,
+    await this.deliverEmail({
       to: payload.to,
       subject: 'You have been invited to join a Markos workspace',
       text: [
@@ -67,6 +62,101 @@ export class MailService {
         </div>
       `,
     });
+  }
+
+  private async deliverEmail(message: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+  }): Promise<void> {
+    const from = this.config.get<string>('smtp.from') ?? 'noreply@markos.dev';
+    const resendApiKey = this.config.get<string>('resend.apiKey')?.trim();
+
+    if (resendApiKey) {
+      await this.sendViaResend({ ...message, from, apiKey: resendApiKey });
+      return;
+    }
+
+    const transporter = this.getTransporter();
+
+    try {
+      await transporter.sendMail({
+        from,
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      });
+    } catch (error) {
+      throw new InternalServerErrorException(
+        this.formatSmtpFailureMessage(error),
+      );
+    }
+  }
+
+  private formatSmtpFailureMessage(error: unknown): string {
+    if (error && typeof error === 'object' && 'code' in error) {
+      const code = String((error as { code?: string }).code ?? '');
+      if (code === 'ETIMEDOUT' || code === 'ESOCKET') {
+        return 'Email could not be sent (SMTP connection timed out). On Render free tier, use RESEND_API_KEY instead of SMTP.';
+      }
+    }
+
+    return 'Email could not be sent. Try again later or contact platform support.';
+  }
+
+  private async sendViaResend(payload: {
+    from: string;
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+    apiKey: string;
+  }): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RESEND_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(RESEND_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${payload.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: payload.from,
+          to: [payload.to],
+          subject: payload.subject,
+          text: payload.text,
+          html: payload.html,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new InternalServerErrorException(
+          `Email could not be sent via Resend (${response.status}). ${detail.slice(0, 200)}`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new InternalServerErrorException(
+          'Email could not be sent (Resend request timed out).',
+        );
+      }
+
+      throw new InternalServerErrorException(
+        'Email could not be sent via Resend. Try again later or contact platform support.',
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private getTransporter(): Transporter {
@@ -91,7 +181,11 @@ export class MailService {
       host,
       port,
       secure,
+      requireTLS: !secure && port === 587,
       auth: { user, pass },
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 20_000,
     });
 
     return this.transporter;
