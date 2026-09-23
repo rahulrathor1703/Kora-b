@@ -1,8 +1,14 @@
 import { resolveEffectiveTrackingBaseUrl } from '../email-campaigns/tracking-config.util';
 
+function trimTrailingSlashes(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
 export default () => ({
   port: parseInt(process.env.PORT ?? '3008', 10),
-  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3007',
+  frontendUrl: trimTrailingSlashes(
+    process.env.FRONTEND_URL ?? 'http://localhost:3007',
+  ),
   databaseUrl:
     process.env.DATABASE_URL ??
     'postgresql://markos:markos@localhost:5435/markos',
@@ -21,6 +27,9 @@ export default () => ({
     from:
       process.env.SMTP_FROM ?? process.env.EMAIL_FROM ?? 'noreply@markos.dev',
     secure: process.env.SMTP_SECURE === 'true',
+  },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY ?? '',
   },
   backendUrl: process.env.BACKEND_URL ?? '',
   websiteOAuthCallbackBaseUrl:
