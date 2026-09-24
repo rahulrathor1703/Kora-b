@@ -1,0 +1,15 @@
+---
+description: Backend quality gates — lint, audit, dependencies
+alwaysApply: true
+---
+
+# Backend Quality Gates
+
+Before any build or merge:
+
+1. `npm run lint` — 0 errors, 0 warnings
+2. `npm run audit:check` — 0 vulnerabilities
+3. `npm run deps:check` — dependencies match semver `wanted` versions
+4. `npm run build` runs all checks automatically via `validate`
+
+Never weaken ESLint rules to bypass warnings. Fix the code instead.

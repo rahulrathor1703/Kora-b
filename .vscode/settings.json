@@ -1,0 +1,11 @@
+{
+  "eslint.useFlatConfig": true,
+  "eslint.workingDirectories": [
+    { "directory": "../markos-frontend", "changeProcessCWD": true },
+    { "directory": ".", "changeProcessCWD": true }
+  ],
+  "eslint.options": {
+    "ignore": true
+  },
+  "eslint.onIgnoredFiles": "off"
+}

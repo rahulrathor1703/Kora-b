@@ -1,0 +1,5 @@
+Email,First Name,Last Name,Company,Phone,Job Title
+alice@example.com,Alice,Smith,Acme Corp,555-0100,Engineer
+bob@example.com,Bob,Jones,Beta LLC,555-0200,Manager
+invalid-email,Bad,Row,Skip Inc,555-0300,Intern
+alice@example.com,Alice,Updated,Acme Corp,555-0101,Lead Engineer
